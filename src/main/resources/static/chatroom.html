@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+	<!-- hacked together by me with the help of stack overflow -->
+	<head>
+		<meta charset="utf-8">
+		<title>Chatroom client demo</title>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.2.0/css/bootstrap.css">
+		<style>
+			.footer {
+			-webkit-box-sizing: border-box; /* Safari/Chrome, other WebKit */
+			-moz-box-sizing: border-box;    /* Firefox, other Gecko */
+			box-sizing: border-box;         /* Opera/IE 8+ */
+			}
+			#footer {
+			background-color: #FF0000;
+			}
+			#sidebar {
+			background-color: #f2f2f2;
+			}
+			.navbar {
+			margin-bottom: 0;
+			!important
+			}
+			.navbar-form .input-group {
+			display: inline-table;
+			vertical-align: middle;
+			}
+			.navbar-form .input-group .input-group-addon,
+			.navbar-form .input-group .input-group-btn,
+			.navbar-form .input-group .form-control {
+			width: auto;  /* HERE IS THE CULPRIT */
+			}
+			/** SOLUTION: in custom CSS **/
+			/* make sure navbar-form's input-group goes 100% i.e. full width of screen 
+			to compliment the display: inline-table; that showed up in 3.2.0 */
+			.navbar-form .input-group {
+			width: 100%;
+			}
+			/* override width: auto; that showed up in 3.2.0
+			with at least 1px for the addon or btn (I had an addon) */
+			.navbar-form .input-group .input-group-addon,
+			.navbar-form .input-group .input-group-btn {
+			width: 1px;
+			}
+			/* separate .form-control and give it width: 100%; */
+			.navbar-form .input-group .form-control {
+			width: 100%;
+			}
+			.sidebar {
+			background-color: #CCCCCC;
+			}
+			@media (min-width: 400px) {
+			.sidebar {
+			position: fixed;
+			top: 0;
+			left: 0;
+			bottom: 0;
+			z-index: 1000;
+			display: block;
+			background-color: #CCCCCC;
+			}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container-fluid">
+			<div class="col-xs-12" style="height:20px;"></div>
+			<div class="row">
+				<div class="col-md-2 sidebar" id="sidebar" role="navigation">
+					<ul class="nav">
+						<hr />
+						<li class="active"><a href="#">Home</a></li>
+						<li><a href="#" id="channel1panel">Link 1</a></li>
+						<li><a href="#" id="channel2panel">Link 2</a></li>
+						<li><a href="#" id="channel3panel">Link 3</a></li>
+					</ul>
+				</div>
+				<div class="col-md-10 col-md-offset-2 content">
+					<ul class="chats" id="currentmessages">
+						<li class="out">You have successfully joined Channel 1.</li>
+						<li class="in">You may now post public messages!</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		<div class="container">
+			<div class="col-xs-12" style="height:45px;"></div>
+		</div>
+		<nav class="navbar navbar-default navbar-fixed-bottom">
+			<div class="container" id="chatbox">
+				<div class='col-md-2'></div>
+				<div class='col-md-9'>
+					<form class="navbar-form" role="search">
+						<div class="input-group">
+							<input type="text" class="form-control" id="textbox">
+							<span class="input-group-btn">
+							<button class="btn btn-default" type="button" id="sendbutton">Send</button>
+							</span>
+						</div>
+					</form>
+				</div>
+				<div class='col-md-1'></div>
+			</div>
+		</nav>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/0.3.4/sockjs.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.2.1/backbone-min.js"></script>
+		<script type="text/javascript">
+            
+            $(document).ready(function(){
+                $("#sendbutton").click(function(){
+                    // addMessage();
+                    sendMessage();
+                });
+            });
+         
+            $('#textbox').keypress(function (e) {
+             var key = e.which;
+             if(key == 13)  // the enter key code
+              {
+                // addMessage();
+                sendMessage();  
+                return false;
+              }
+            });
+            
+            $('#channel1panel').on('click', function(){
+                console.log("hey");
+                connect();
+            })
+            $('#channel2panel').on('click', function(){
+                console.log("hey");
+            })
+            $('#channel3panel').on('click', function(){
+                console.log($(this).text());
+            })
+        </script>
+        <script>
+            var stompClient = null;
+            
+            function setConnected(connected){
+                document.getElementById('chatbox').style.visibility = connected ? 'visible' : 'hidden';
+                document.getElementById('currentmessages').style.visibility = connected ? 'visible' : 'hidden';
+            }
+            
+            function connect(){
+                var socket = SockJS('/hello');
+                stompClient = Stomp.over(socket);
+                stompClient.connect({}, function(frame){
+                    setConnected(true);
+                    console.log("Connection established:" + frame);
+                    stompClient.subscribe('/topic/greetings', function(greeting){
+                        showMessage(JSON.parse(greeting.body).content);
+                    });
+                });
+            }
+            
+            function disconnect(){
+                if (stompClient != null){
+                    stompClient.disconnect();
+                }
+                setConnected(false);
+                console.log("Disconnected from server.");
+            }
+            
+            // function addMessage() was split into sendMessage() and showMessage();
+            
+            function sendMessage(){
+                
+                var message = document.getElementById('textbox').value || 'blank message'; // textbox text will show up if present
+                console.log("sending message"); 
+                stompClient.send("/app/hello", {}, JSON.stringify({ 'content': message }));
+            }
+            
+            function showMessage(message){
+                var direction='out';
+                // var textVar = document.getElementById('textbox').value || 'New message'; // textbox text will show up if present
+
+                $('#textbox').val('');
+
+                $('.chats').append('<li class="'+direction+'">'+message+'</li>'); //append new item to list
+
+                $('body, html').stop(true, false).animate({
+                    scrollTop: $('.chats li:last-child').offset().top + $('document').height()
+                }, '10', 'swing', function() {  // 10 ms animation timeframe
+                   console.log("Finished animating");
+                });
+            }
+            
+            setConnected(false); // setup as false
+            console.log("loading finished");
+        </script>
+    </body>
+</html>
